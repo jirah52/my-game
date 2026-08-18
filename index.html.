@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>班級工作極速秒殺選拔</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
+  .card { background: #1e1e1e; border-radius: 16px; padding: 24px; width: 100%; max-width: 450px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); position: relative; border: 1px solid #333; }
+  
+  /* 設定按鈕 */
+  .config-toggle { position: absolute; top: 18px; right: 18px; background: transparent; border: 1px solid #555; color: #aaa; padding: 4px 10px; border-radius: 20px; font-size: 13px; cursor: pointer; }
+  .config-toggle:hover { border-color: #2ed573; color: #2ed573; }
+
+  h2 { font-size: 22px; margin-bottom: 6px; color: #ffffff; text-align: center; }
+  .subtitle { font-size: 13px; color: #888; text-align: center; margin-bottom: 16px; }
+  .student-badge { background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 6px 12px; font-size: 13px; color: #2ed573; text-align: center; margin-bottom: 14px; }
+  .timer { font-size: 34px; font-weight: bold; color: #ff4757; text-align: center; margin: 12px 0; font-family: monospace; letter-spacing: 2px; }
+  
+  /* 按鈕 */
+  button.action-btn { background: #2ed573; color: #000; border: none; padding: 13px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 10px; transition: 0.2s; }
+  button.action-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  button:disabled { background: #444 !important; color: #777 !important; cursor: not-allowed; transform: none !important; }
+
+  /* 輸入框與滾動選單 */
+  label { display: block; font-size: 13px; color: #bbb; margin-top: 10px; margin-bottom: 4px; }
+  input, textarea { width: 100%; padding: 11px; border-radius: 8px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 15px; }
+  textarea { resize: vertical; min-height: 120px; font-family: inherit; line-height: 1.5; }
+  input:focus, textarea:focus { outline: none; border-color: #2ed573; }
+  
+  .target-grid { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; max-height: 300px; overflow-y: auto; padding-right: 4px; }
+  .target-grid::-webkit-scrollbar { width: 6px; }
+  .target-grid::-webkit-scrollbar-track { background: #222; border-radius: 4px; }
+  .target-grid::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+  
+  .target-item { background: #2a2a2a; border: 2px solid #3a3a3a; border-radius: 8px; padding: 10px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 14px; transition: 0.15s; }
+  .target-item:hover { border-color: #2ed573; background: #333; }
+  .target-item.selected { border-color: #2ed573; background: rgba(46, 213, 115, 0.15); font-weight: bold; }
+  .target-badge { font-size: 12px; color: #2ed573; background: rgba(46, 213, 115, 0.1); padding: 2px 6px; border-radius: 4px; }
+
+  .hidden { display: none !important; }
+  .text-success { color: #2ed573; }
+  .text-fail { color: #ff4757; }
+  .status-box { background: #2a2a2a; padding: 16px; border-radius: 8px; margin: 14px 0; font-size: 14px; line-height: 1.7; text-align: left; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <button class="config-toggle" id="btn-toggle-config" onclick="toggleConfig()">⚙️ 設定職務</button>
+
+  <!-- 1. 設定面板 -->
+  <div id="view-config" class="hidden">
+    <h2>🎯 自訂職務與考題</h2>
+    <div class="subtitle">每行一項工作，修改後點擊儲存</div>
+
+    <label>活動標題：</label>
+    <input type="text" id="cfg-title" value="新學期班級幹部與幹事搶選" />
+
+    <label>副標題 / 規則：</label>
+    <input type="text" id="cfg-subtitle" value="需先完成實名登記 · 每人限搶 1 項" />
+
+    <label>職缺項目（一行一項，預設 18 項）：</label>
+    <textarea id="cfg-items"></textarea>
+
+    <label>防機器人考題：</label>
+    <input type="text" id="cfg-question" value="學校英文縮寫是什麼？" />
+
+    <label>考題答案（不分大小寫）：</label>
+    <input type="text" id="cfg-answer" value="NPTU" />
+
+    <label>倒數秒數：</label>
+    <input type="number" id="cfg-seconds" value="5" min="2" max="30" />
+
+    <button class="action-btn" onclick="saveConfig()">儲存設定並開始</button>
+  </div>
+
+  <!-- 2. 第一步：實名登記（座號 + 姓名） -->
+  <div id="view-auth">
+    <h2 id="login-title">新學期班級幹部與幹事搶選</h2>
+    <div class="subtitle" id="login-subtitle">請先完成登記才能進入搶票系統</div>
+
+    <label>學生座號（例：05）：</label>
+    <input type="text" id="student-id" placeholder="請輸入座號" autofocus />
+
+    <label>學生姓名：</label>
+    <input type="text" id="student-name" placeholder="請輸入全名" />
+
+    <button class="action-btn" onclick="submitAuth()">確認身分，進入倒數</button>
+  </div>
+
+  <!-- 3. 第二步：倒數等候 -->
+  <div id="view-countdown" class="hidden">
+    <div class="student-badge" id="badge-info"></div>
+    <h2 id="display-title">準備搶選</h2>
+    <div class="subtitle">倒數歸零前請保持專注！</div>
+    <div class="timer" id="timer-display">00:05.00</div>
+    <button class="action-btn" id="btn-enter" disabled onclick="startSelectTarget()">等待系統開啟...</button>
+  </div>
+
+  <!-- 4. 第三步：挑選 18 個工作 -->
+  <div id="view-select" class="hidden">
+    <h2>🔥 選擇搶選職務</h2>
+    <div class="subtitle">滑動挑選目標職務（共 <span id="item-count">18</span> 項）</div>
+    <div class="target-grid" id="target-list"></div>
+    <button class="action-btn" id="btn-confirm-target" disabled onclick="enterCaptcha()">確認選定此職務</button>
+  </div>
+
+  <!-- 5. 第四步：防機器人驗證 -->
+  <div id="view-captcha" class="hidden">
+    <h2>🤖 防機器人驗證</h2>
+    <div class="subtitle" id="captcha-question">請回答問題以完成搶票</div>
+    <input type="text" id="captcha-input" placeholder="請在此輸入答案..." autofocus />
+    <button class="action-btn" onclick="verifyAnswer()">送出搶選</button>
+  </div>
+
+  <!-- 6. 第五步：排隊配對中 -->
+  <div id="view-loading" class="hidden" style="text-align: center;">
+    <h2>🌀 伺服器排隊中</h2>
+    <div class="subtitle">正在向系統登記名額，請勿關閉視窗...</div>
+    <div class="timer">⏳</div>
+  </div>
+
+  <!-- 7. 第六步：結果畫面 -->
+  <div id="view-result" class="hidden" style="text-align: center;">
+    <h2 id="result-status"></h2>
+    <div class="status-box" id="result-details"></div>
+    <button class="action-btn" id="btn-result-action" onclick="handleResultAction()">回到首頁</button>
+  </div>
+</div>
+
+<script>
+  // 18 個預設班級職缺
+  const defaultItems = [
+    '01. 班長 (Class Leader)',
+    '02. 副班長 (Vice Leader)',
+    '03. 風紀股長 (Discipline)',
+    '04. 衛生股長 (Hygiene)',
+    '05. 體育股長 (Sports)',
+    '06. 學藝股長 (Academic & Art)',
+    '07. 擦黑板小天使',
+    '08. 關冷氣與電燈長',
+    '09. 國語作業收發員',
+    '10. 數學作業收發員',
+    '11. 英語作業收發員',
+    '12. 自然/社會作業收發員',
+    '13. 午餐抬餐小隊長',
+    '14. 午餐水果點心發放員',
+    '15. 資源回收分類長',
+    '16. 掃具整潔管理員',
+    '17. 班級圖書角管理員',
+    '18. 投影機與電腦小幫手'
+  ];
+
+  const defaultConfig = {
+    title: '新學期班級幹部與幹事搶選',
+    subtitle: '需先完成實名登記 · 每人限搶 1 項',
+    items: defaultItems,
+    question: '1+1=？',
+    answer: '2',
+    seconds: 5
+  };
+
+  let config = JSON.parse(localStorage.getItem('rush_job_v2')) || defaultConfig;
+  let timerInterval = null;
+  let remainingTime = 0;
+  let selectedItem = null;
+  let currentUser = { id: '', name: '' };
+  let lastWasSuccess = false;
+
+  function init() {
+    document.getElementById('login-title').innerText = config.title;
+    document.getElementById('login-subtitle').innerText = config.subtitle;
+    document.getElementById('display-title').innerText = config.title;
+    document.getElementById('captcha-question').innerText = config.question;
+    document.getElementById('item-count').innerText = config.items.length;
+  }
+
+  // 1. 驗證座號與姓名
+  function submitAuth() {
+    const studentId = document.getElementById('student-id').value.trim();
+    const studentName = document.getElementById('student-name').value.trim();
+
+    if (!studentId || !studentName) {
+      alert('請務必填寫「座號」與「姓名」才能進入搶選！');
+      return;
+    }
+
+    currentUser = { id: studentId, name: studentName };
+    document.getElementById('badge-info').innerText = `👤 登記同學：座號 ${studentId} 號 - ${studentName}`;
+
+    document.getElementById('view-auth').classList.add('hidden');
+    document.getElementById('view-countdown').classList.remove('hidden');
+    startCountdown();
+  }
+
+  // 2. 倒數計時
+  function startCountdown() {
+    clearInterval(timerInterval);
+    remainingTime = parseFloat(config.seconds);
+    const btnEnter = document.getElementById('btn-enter');
+    btnEnter.disabled = true;
+    btnEnter.innerText = '等待倒數中...';
+    btnEnter.style.background = '#444';
+    btnEnter.style.color = '#777';
+
+    timerInterval = setInterval(() => {
+      remainingTime -= 0.05;
+      if (remainingTime <= 0) {
+        remainingTime = 0;
+        clearInterval(timerInterval);
+        btnEnter.disabled = false;
+        btnEnter.innerText = '🔥 進入搶選！';
+        btnEnter.style.background = '#ff4757';
+        btnEnter.style.color = '#fff';
+      }
+      document.getElementById('timer-display').innerText = '00:' + (remainingTime < 10 ? '0' : '') + remainingTime.toFixed(2);
+    }, 50);
+  }
+
+  // 3. 渲染 18 個工作清單
+  function startSelectTarget() {
+    document.getElementById('view-countdown').classList.add('hidden');
+    document.getElementById('view-select').classList.remove('hidden');
+
+    const container = document.getElementById('target-list');
+    container.innerHTML = '';
+    selectedItem = null;
+    document.getElementById('btn-confirm-target').disabled = true;
+
+    config.items.forEach((item) => {
+      const div = document.createElement('div');
+      div.className = 'target-item';
+      div.innerHTML = `<span>${item}</span><span class="target-badge">名額：1</span>`;
+      div.onclick = () => {
+        document.querySelectorAll('.target-item').forEach(el => el.classList.remove('selected'));
+        div.classList.add('selected');
+        selectedItem = item;
+        document.getElementById('btn-confirm-target').disabled = false;
+      };
+      container.appendChild(div);
+    });
+  }
+
+  // 4. 防機器人驗證
+  function enterCaptcha() {
+    document.getElementById('view-select').classList.add('hidden');
+    document.getElementById('view-captcha').classList.remove('hidden');
+    document.getElementById('captcha-input').value = '';
+    document.getElementById('captcha-input').focus();
+  }
+
+  // 5. 判定驗證與搶票結果
+  function verifyAnswer() {
+    const input = document.getElementById('captcha-input').value.trim().toLowerCase();
+    const correct = config.answer.trim().toLowerCase();
+
+    if (input === correct) {
+      document.getElementById('view-captcha').classList.add('hidden');
+      document.getElementById('view-loading').classList.remove('hidden');
+
+      setTimeout(() => {
+        document.getElementById('view-loading').classList.add('hidden');
+        document.getElementById('view-result').classList.remove('hidden');
+
+        // 70% 機率成功，30% 機率已被搶走
+        const isSuccess = Math.random() > 0.3;
+        lastWasSuccess = isSuccess;
+        const statusEl = document.getElementById('result-status');
+        const detailEl = document.getElementById('result-details');
+        const actionBtn = document.getElementById('btn-result-action');
+
+        if (isSuccess) {
+          statusEl.innerText = '🎉 搶選成功！';
+          statusEl.className = 'text-success';
+          detailEl.innerHTML = `
+            <strong>登記同學：</strong>座號 ${currentUser.id} - ${currentUser.name}<br>
+            <strong>錄取職務：</strong>${selectedItem}<br>
+            <strong>登記序號：</strong>#${Math.floor(1000 + Math.random() * 9000)}<br>
+            <strong>狀態：</strong>登記完成，名額已鎖定！
+          `;
+          actionBtn.innerText = '完成並重新開始';
+          actionBtn.style.background = '#2ed573';
+        } else {
+          statusEl.innerText = '😭 殘念！已被搶先一步';
+          statusEl.className = 'text-fail';
+          detailEl.innerHTML = `
+            同學：<strong>座號 ${currentUser.id} ${currentUser.name}</strong><br>
+            您所選擇的 <strong>${selectedItem}</strong> 剛好已被其他同學搶先登記！<br><br>
+            <span style="color:#ff4757;">⚠️ 依規則需跳出重新填寫身分並重新搶選其他職務。</span>
+          `;
+          actionBtn.innerText = '🔄 重新填寫並再次搶選';
+          actionBtn.style.background = '#ff4757';
+        }
+      }, 1500);
+    } else {
+      alert('驗證答案錯誤，請重新作答！');
+      document.getElementById('captcha-input').value = '';
+      document.getElementById('captcha-input').focus();
+    }
+  }
+
+  // 6. 結果按鈕：跳回最外層起點重新填寫
+  function handleResultAction() {
+    // 清空輸入框
+    document.getElementById('student-id').value = '';
+    document.getElementById('student-name').value = '';
+    currentUser = { id: '', name: '' };
+    selectedItem = null;
+
+    document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
+    document.getElementById('view-auth').classList.remove('hidden');
+    init();
+  }
+
+  // 7. 設定面板控制
+  function toggleConfig() {
+    const configView = document.getElementById('view-config');
+    const isShowing = !configView.classList.contains('hidden');
+
+    if (isShowing) {
+      configView.classList.add('hidden');
+      handleResultAction();
+    } else {
+      clearInterval(timerInterval);
+      document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
+      configView.classList.remove('hidden');
+
+      document.getElementById('cfg-title').value = config.title;
+      document.getElementById('cfg-subtitle').value = config.subtitle;
+      document.getElementById('cfg-items').value = config.items.join('\n');
+      document.getElementById('cfg-question').value = config.question;
+      document.getElementById('cfg-answer').value = config.answer;
+      document.getElementById('cfg-seconds').value = config.seconds;
+    }
+  }
+
+  function saveConfig() {
+    const itemsRaw = document.getElementById('cfg-items').value.trim();
+    const itemsArray = itemsRaw.split('\n').map(i => i.trim()).filter(i => i.length > 0);
+
+    config = {
+      title: document.getElementById('cfg-title').value || '班級工作搶選',
+      subtitle: document.getElementById('cfg-subtitle').value || '',
+      items: itemsArray.length > 0 ? itemsArray : defaultItems,
+      question: document.getElementById('cfg-question').value || '1+1=?',
+      answer: document.getElementById('cfg-answer').value || '2',
+      seconds: parseInt(document.getElementById('cfg-seconds').value) || 5
+    };
+
+    localStorage.setItem('rush_job_v2', JSON.stringify(config));
+    document.getElementById('view-config').classList.add('hidden');
+    handleResultAction();
+  }
+
+  init();
+</script>
+</body>
+</html>
