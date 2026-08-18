@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>極限秒殺模擬器</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
+  .card { background: #1e1e1e; border-radius: 16px; padding: 28px; width: 100%; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); position: relative; border: 1px solid #333; }
+  
+  /* 設定按鈕 */
+  .config-toggle { position: absolute; top: 18px; right: 18px; background: transparent; border: 1px solid #555; color: #aaa; padding: 4px 10px; border-radius: 20px; font-size: 13px; cursor: pointer; width: auto; }
+  .config-toggle:hover { border-color: #2ed573; color: #2ed573; }
+
+  h2 { font-size: 22px; margin-bottom: 8px; color: #ffffff; text-align: center; }
+  .subtitle { font-size: 14px; color: #888; text-align: center; margin-bottom: 20px; }
+  .timer { font-size: 36px; font-weight: bold; color: #ff4757; text-align: center; margin: 16px 0; font-family: monospace; letter-spacing: 2px; }
+  
+  /* 按鈕樣式 */
+  button.action-btn { background: #2ed573; color: #000; border: none; padding: 14px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 12px; transition: 0.2s; }
+  button.action-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  button:disabled { background: #444 !important; color: #777 !important; cursor: not-allowed; transform: none !important; }
+
+  /* 表單與輸入 */
+  label { display: block; font-size: 13px; color: #bbb; margin-top: 12px; margin-bottom: 4px; }
+  input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 15px; }
+  input:focus, select:focus { outline: none; border-color: #2ed573; }
+  
+  /* 區域選擇卡片 */
+  .target-grid { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+  .target-item { background: #2a2a2a; border: 2px solid #444; border-radius: 8px; padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 14px; transition: 0.2s; }
+  .target-item:hover { border-color: #2ed573; }
+  .target-item.selected { border-color: #2ed573; background: rgba(46, 213, 115, 0.15); font-weight: bold; }
+
+  .hidden { display: none !important; }
+  .text-success { color: #2ed573; }
+  .text-fail { color: #ff4757; }
+  .status-box { background: #2a2a2a; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <button class="config-toggle" id="btn-toggle-config" onclick="toggleConfig()">⚙️ 設定目標</button>
+
+  <!-- 1. 設定面板 -->
+  <div id="view-config" class="hidden">
+    <h2>🎯 自訂搶購目標</h2>
+    <div class="subtitle">修改後點擊「儲存」即可立即開始體驗</div>
+
+    <label>活動 / 搶購主題：</label>
+    <input type="text" id="cfg-title" value="2026 巡迴演唱會 台北站" />
+
+    <label>副標題 / 備註：</label>
+    <input type="text" id="cfg-subtitle" value="搶票系統測試 · 每人限購 2 張" />
+
+    <label>目標項目一（名稱 + 說明）：</label>
+    <input type="text" id="cfg-item1" value="特區搖滾 A 區 (NT$ 5,800)" />
+
+    <label>目標項目二（名稱 + 說明）：</label>
+    <input type="text" id="cfg-item2" value="二樓看台 2B 區 (NT$ 3,800)" />
+
+    <label>目標項目三（名稱 + 說明）：</label>
+    <input type="text" id="cfg-item3" value="三樓視野優選區 (NT$ 1,800)" />
+
+    <label>驗證問題（題目）：</label>
+    <input type="text" id="cfg-question" value="這場活動是幾年舉辦？（請填西元年）" />
+
+    <label>驗證答案（不分大小寫）：</label>
+    <input type="text" id="cfg-answer" value="2026" />
+
+    <label>倒數秒數：</label>
+    <input type="number" id="cfg-seconds" value="5" min="3" max="60" />
+
+    <button class="action-btn" onclick="saveConfig()">儲存設定並開始</button>
+  </div>
+
+  <!-- 2. 遊戲主畫面：倒數 -->
+  <div id="view-countdown">
+    <h2 id="display-title">2026 巡迴演唱會</h2>
+    <div class="subtitle" id="display-subtitle">搶票系統測試</div>
+    <div class="timer" id="timer-display">00:05.00</div>
+    <button class="action-btn" id="btn-enter" disabled onclick="startSelectTarget()">即刻進入</button>
+  </div>
+
+  <!-- 3. 選取目標項目 -->
+  <div id="view-select" class="hidden">
+    <h2>選擇目標區域</h2>
+    <div class="subtitle">請快速選擇你要搶的項目</div>
+    <div class="target-grid" id="target-list"></div>
+    <button class="action-btn" id="btn-confirm-target" disabled onclick="enterCaptcha()">確認選取</button>
+  </div>
+
+  <!-- 4. 驗證題目 -->
+  <div id="view-captcha" class="hidden">
+    <h2>🤖 防機器人驗證</h2>
+    <div class="subtitle" id="captcha-question">請回答問題以完成驗證</div>
+    <input type="text" id="captcha-input" placeholder="請在此輸入答案..." autofocus />
+    <button class="action-btn" onclick="verifyAnswer()">送出驗證</button>
+  </div>
+
+  <!-- 5. 排隊結帳中 -->
+  <div id="view-loading" class="hidden" style="text-align: center;">
+    <h2>🌀 系統處理中</h2>
+    <div class="subtitle">正在為您保留名額，請勿關閉視窗...</div>
+    <div class="timer">⏳</div>
+  </div>
+
+  <!-- 6. 結果畫面 -->
+  <div id="view-result" class="hidden" style="text-align: center;">
+    <h2 id="result-status"></h2>
+    <div class="status-box" id="result-details"></div>
+    <button class="action-btn" onclick="restartGame()">再搶一次</button>
+  </div>
+</div>
+
+<script>
+  // 預設設定資料
+  const defaultConfig = {
+    title: '2026 巡迴演唱會 台北站',
+    subtitle: '搶票系統測試 · 每人限購 2 張',
+    items: [
+      '特區搖滾 A 區 (NT$ 5,800)',
+      '二樓看台 2B 區 (NT$ 3,800)',
+      '三樓視野優選區 (NT$ 1,800)'
+    ],
+    question: '這場活動是幾年舉辦？（請填西元年）',
+    answer: '2026',
+    seconds: 5
+  };
+
+  let config = JSON.parse(localStorage.getItem('rush_game_config')) || defaultConfig;
+  let timerInterval = null;
+  let remainingTime = 0;
+  let selectedItem = null;
+
+  function init() {
+    document.getElementById('display-title').innerText = config.title;
+    document.getElementById('display-subtitle').innerText = config.subtitle;
+    document.getElementById('captcha-question').innerText = config.question;
+    startCountdown();
+  }
+
+  function startCountdown() {
+    clearInterval(timerInterval);
+    remainingTime = parseFloat(config.seconds);
+    const btnEnter = document.getElementById('btn-enter');
+    btnEnter.disabled = true;
+    btnEnter.innerText = '等待倒數中...';
+    btnEnter.style.background = '#444';
+    btnEnter.style.color = '#777';
+
+    timerInterval = setInterval(() => {
+      remainingTime -= 0.05;
+      if (remainingTime <= 0) {
+        remainingTime = 0;
+        clearInterval(timerInterval);
+        btnEnter.disabled = false;
+        btnEnter.innerText = '🔥 立即搶購！';
+        btnEnter.style.background = '#ff4757';
+        btnEnter.style.color = '#fff';
+      }
+      document.getElementById('timer-display').innerText = '00:' + (remainingTime < 10 ? '0' : '') + remainingTime.toFixed(2);
+    }, 50);
+  }
+
+  function startSelectTarget() {
+    document.getElementById('view-countdown').classList.add('hidden');
+    document.getElementById('view-select').classList.remove('hidden');
+
+    const container = document.getElementById('target-list');
+    container.innerHTML = '';
+    selectedItem = null;
+    document.getElementById('btn-confirm-target').disabled = true;
+
+    config.items.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = 'target-item';
+      div.innerHTML = `<span>${item}</span><span style="color:#2ed573;">剩餘名額</span>`;
+      div.onclick = () => {
+        document.querySelectorAll('.target-item').forEach(el => el.classList.remove('selected'));
+        div.classList.add('selected');
+        selectedItem = item;
+        document.getElementById('btn-confirm-target').disabled = false;
+      };
+      container.appendChild(div);
+    });
+  }
+
+  function enterCaptcha() {
+    document.getElementById('view-select').classList.add('hidden');
+    document.getElementById('view-captcha').classList.remove('hidden');
+    document.getElementById('captcha-input').value = '';
+    document.getElementById('captcha-input').focus();
+  }
+
+  function verifyAnswer() {
+    const input = document.getElementById('captcha-input').value.trim().toLowerCase();
+    const correct = config.answer.trim().toLowerCase();
+
+    if (input === correct) {
+      document.getElementById('view-captcha').classList.add('hidden');
+      document.getElementById('view-loading').classList.remove('hidden');
+
+      setTimeout(() => {
+        document.getElementById('view-loading').classList.add('hidden');
+        document.getElementById('view-result').classList.remove('hidden');
+
+        // 75% 成功機率模擬
+        const isSuccess = Math.random() > 0.25;
+        const statusEl = document.getElementById('result-status');
+        const detailEl = document.getElementById('result-details');
+
+        if (isSuccess) {
+          statusEl.innerText = '🎉 搶購成功！';
+          statusEl.className = 'text-success';
+          detailEl.innerHTML = `
+            <strong>活動：</strong>${config.title}<br>
+            <strong>獲得項目：</strong>${selectedItem}<br>
+            <strong>訂單序號：</strong>#${Math.floor(1000 + Math.random() * 9000)}<br>
+            <strong>狀態：</strong>保留名額中，請於 10 分鐘內付款
+          `;
+        } else {
+          statusEl.innerText = '😭 殘念！已售完';
+          statusEl.className = 'text-fail';
+          detailEl.innerHTML = `
+            您所選擇的 <strong>${selectedItem}</strong> 已被其他買家搶先結帳。<br>
+            請重新整理再次嘗試！
+          `;
+        }
+      }, 1500);
+    } else {
+      alert('驗證答案錯誤，請重新作答！');
+      document.getElementById('captcha-input').value = '';
+      document.getElementById('captcha-input').focus();
+    }
+  }
+
+  function toggleConfig() {
+    const configView = document.getElementById('view-config');
+    const isShowing = !configView.classList.contains('hidden');
+
+    if (isShowing) {
+      configView.classList.add('hidden');
+      restartGame();
+    } else {
+      clearInterval(timerInterval);
+      document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
+      configView.classList.remove('hidden');
+
+      // 載入當前設定至輸入框
+      document.getElementById('cfg-title').value = config.title;
+      document.getElementById('cfg-subtitle').value = config.subtitle;
+      document.getElementById('cfg-item1').value = config.items[0] || '';
+      document.getElementById('cfg-item2').value = config.items[1] || '';
+      document.getElementById('cfg-item3').value = config.items[2] || '';
+      document.getElementById('cfg-question').value = config.question;
+      document.getElementById('cfg-answer').value = config.answer;
+      document.getElementById('cfg-seconds').value = config.seconds;
+    }
+  }
+
+  function saveConfig() {
+    config = {
+      title: document.getElementById('cfg-title').value || '未命名活動',
+      subtitle: document.getElementById('cfg-subtitle').value || '',
+      items: [
+        document.getElementById('cfg-item1').value || '項目 A',
+        document.getElementById('cfg-item2').value || '項目 B',
+        document.getElementById('cfg-item3').value || '項目 C'
+      ],
+      question: document.getElementById('cfg-question').value || '1+1=?',
+      answer: document.getElementById('cfg-answer').value || '2',
+      seconds: parseInt(document.getElementById('cfg-seconds').value) || 5
+    };
+
+    localStorage.setItem('rush_game_config', JSON.stringify(config));
+    document.getElementById('view-config').classList.add('hidden');
+    restartGame();
+  }
+
+  function restartGame() {
+    document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
+    document.getElementById('view-countdown').classList.remove('hidden');
+    init();
+  }
+
+  // 啟動遊戲
+  init();
+</script>
+</body>
+</html>
